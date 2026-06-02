@@ -215,9 +215,9 @@
   <table id="mainTable">
     <thead>
       <tr>
-        <th>人名</th>
         <th onclick="sortBy('stock_code')">代碼</th>
         <th onclick="sortBy('stock_name')">名稱</th>
+        <th>人名</th>
         <th onclick="sortBy('holders')">人數</th>
         <th onclick="sortBy('agm_date')">股東會</th>
         <th>領取時間</th>
@@ -411,7 +411,17 @@ function setupRealtime() {
       if (!res.ok) return;
       const data = await res.json();
       const normalizedData = normalizeRows(data);
-      const statusHash = rows => JSON.stringify(rows.map(r => ({id:r.id, ...Object.fromEntries(PERSONS.map(p => [p, !!r['collected_' + p]]))})));
+      const statusHash = rows => JSON.stringify(rows.map(r => ({
+        id: r.id,
+        pickup_time: r.pickup_time || '',
+        gift: r.gift || '',
+        registrar: r.registrar || '',
+        registrar_address: r.registrar_address || '',
+        ...Object.fromEntries(PERSONS.flatMap(p => [
+          ['has_' + p, !!(r['has_' + p] !== undefined ? r['has_' + p] : r[p])],
+          ['collected_' + p, !!r['collected_' + p]]
+        ]))
+      })));
       const newHash = statusHash(normalizedData);
       const oldHash = statusHash(allData);
       if (newHash !== oldHash) {
@@ -518,8 +528,8 @@ function editableCell(row, field, label, className = '') {
   const raw = row[field];
   const value = raw && String(raw).trim() && raw !== 'nan' ? String(raw) : '';
   const shown = value || '—';
-  const cls = className ? ` class="${className}"` : '';
-  return `<span${cls} title="雙擊修改：${escapeHtml(value || label)}">${escapeHtml(shown)}</span>`;
+  const cls = className ? ` class="${className} editable-cell"` : ' class="editable-cell"';
+  return `<span${cls} title="點一下修改：${escapeHtml(value || label)}">${escapeHtml(shown)}</span>`;
 }
 
 function openEditPrompt(e, id, field, label) {
@@ -566,17 +576,17 @@ function renderTable() {
     const registrar = editableCell(row, 'registrar', '股代', 'registrar-text');
     
     return `<tr ${rowClass} onclick="openModal(${row.id})" style="cursor:pointer">
+      <td><span class="stock-code">${row.stock_code||'-'}</span></td>
+      <td><div class="stock-name">${row.stock_name||''}</div></td>
       <td onclick="event.stopPropagation()"><div class="person-cells">${persons}</div>
         <div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':pct>50?'var(--yellow)':'var(--accent)'}"></div></div>
         <div class="progress-text">${totalCol}/${totalHas}</div></div>
       </td>
-      <td><span class="stock-code">${row.stock_code||'-'}</span></td>
-      <td><div class="stock-name">${row.stock_name||''}</div></td>
       <td><span class="holders-badge ${holderClass}">${totalHas}</span></td>
       <td><div class="date-text">${row.agm_date||'-'}</div></td>
-      <td ondblclick="openEditPrompt(event,${row.id},'pickup_time','領取時間')">${pickup}</td>
-      <td ondblclick="openEditPrompt(event,${row.id},'gift','紀念品')">${gift}</td>
-      <td ondblclick="openEditPrompt(event,${row.id},'registrar','股代')">${registrar}</td>
+      <td class="editable-td" onclick="openEditPrompt(event,${row.id},'pickup_time','領取時間')">${pickup}</td>
+      <td class="editable-td" onclick="openEditPrompt(event,${row.id},'gift','紀念品')">${gift}</td>
+      <td class="editable-td" onclick="openEditPrompt(event,${row.id},'registrar','股代')">${registrar}</td>
     </tr>`;
   }).join('');
   
