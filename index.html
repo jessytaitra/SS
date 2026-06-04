@@ -51,6 +51,11 @@
   .filter-chip:hover, .filter-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(108,141,250,.12); }
   .filter-chip.person-chip { border-color: var(--accent2); color: var(--accent2); }
   .filter-chip.person-chip.active { background: rgba(167,139,250,.15); }
+  .month-bar { padding: 8px 16px; display: flex; gap: 8px; align-items: center; overflow-x: auto; background: var(--surface); border-bottom: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
+  .month-bar::-webkit-scrollbar { display: none; }
+  .month-label { color: var(--text2); font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .month-chip { border: 1px solid rgba(251,191,36,.45); border-radius: 18px; padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer; background: transparent; color: var(--yellow); white-space: nowrap; transition: all .15s; }
+  .month-chip:hover, .month-chip.active { background: rgba(251,191,36,.13); border-color: var(--yellow); color: var(--yellow); }
   
   /* Stats bar */
   .stats-bar { padding: 8px 16px; display: flex; gap: 12px; overflow-x: auto; background: var(--surface2); border-bottom: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
@@ -152,6 +157,14 @@
   .history-change { font-size: 13px; color: var(--text2); line-height: 1.45; word-break: break-word; }
   .history-empty { text-align: center; color: var(--text3); padding: 40px 12px; }
   
+
+  .connection-status { padding: 6px 16px; font-size: 12px; color: var(--text3); background: rgba(34,38,58,.65); border-bottom: 1px solid rgba(46,51,84,.6); display: none; line-height: 1.45; }
+  .connection-status.show { display: block; }
+  .connection-status.ok { color: var(--green); }
+  .connection-status.bad { color: var(--red); }
+  .connection-detail { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text2); line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .status-pill { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; background:rgba(108,141,250,.12); border:1px solid rgba(108,141,250,.3); font-size:12px; }
+
   /* Person label colors */
   .p-guan { color: #60a5fa; }
   .p-mi { color: #f472b6; }
@@ -175,11 +188,13 @@
   <div class="controls">
     <input class="search-box" id="searchBox" type="search" placeholder="🔍 搜尋股票名稱、代碼、紀念品..." autocomplete="off">
     <button class="btn btn-outline" onclick="openHistoryModal()">🕘 歷程</button>
+    <button class="btn btn-outline" id="dbTestBtn" onclick="testDatabaseConnection(true)">🧪 測試資料庫連線</button>
     <button class="btn btn-outline" id="syncBtn" onclick="syncData()">🔄</button>
     <button class="btn btn-outline" id="retryBtn" onclick="retryPendingWrites()">🔁 重新同步</button>
     <button class="btn btn-outline" onclick="exportExcel()">⬇️ Excel</button>
   </div>
 </div>
+<div class="connection-status" id="connectionStatus"></div>
 
 <div class="filter-bar" id="filterBar">
   <button class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">全部</button>
@@ -194,6 +209,15 @@
   <button class="filter-chip" data-filter="pending" onclick="setFilter('pending',this)">⏳ 未全領</button>
   <button class="filter-chip" data-filter="done" onclick="setFilter('done',this)">✅ 全部領完</button>
   <button class="filter-chip" data-filter="pickup" onclick="setFilter('pickup',this)">📅 有領取時間</button>
+</div>
+
+<div class="month-bar" id="monthBar">
+  <span class="month-label">月份</span>
+  <button class="month-chip active" data-month="all" onclick="setMonthFilter('all',this)">全部月份</button>
+  <button class="month-chip" data-month="5" onclick="setMonthFilter('5',this)">5月</button>
+  <button class="month-chip" data-month="6" onclick="setMonthFilter('6',this)">6月</button>
+  <button class="month-chip" data-month="7" onclick="setMonthFilter('7',this)">7月</button>
+  <button class="month-chip" data-month="8" onclick="setMonthFilter('8',this)">8月</button>
 </div>
 
 <div class="stats-bar" id="statsBar">
@@ -292,6 +316,18 @@
   </div>
 </div>
 
+
+<!-- Database Connection Modal -->
+<div class="sql-modal" id="dbTestModal">
+  <div class="sql-box">
+    <h2>🧪 資料庫連線測試</h2>
+    <p style="font-size: 13px;color:var(--text2);margin-bottom:12px">這裡會顯示目前連線測試結果與 Supabase 錯誤原因。</p>
+    <div class="connection-detail" id="dbTestContent">尚未測試</div>
+    <button class="sql-close" onclick="testDatabaseConnection(true)">重新測試</button>
+    <button class="sql-close" onclick="closeDbTestModal()" style="margin-top:8px">關閉</button>
+  </div>
+</div>
+
 <script>
 // ====== CONFIG ======
 const SUPABASE_URL = 'https://sippzngyuszavmkpzrno.supabase.co';
@@ -311,6 +347,8 @@ const SEED_DATA = [{"stock_code": "6770","stock_name": "力積電","guan": false
 let allData = [];
 let displayData = [];
 let currentFilter = 'all';
+let currentMonthFilter = 'all';
+let dbColumnSet = new Set();
 let sortCol = null;
 let sortDir = 1;
 let isOnline = false;
@@ -323,7 +361,10 @@ function normalizeRows(rows) {
     const jingHas = row.has_jing !== undefined ? row.has_jing : !!row.jing;
     if (row.has_hao === undefined && row.hao === undefined) row.has_hao = jingHas;
     if (row.hao === undefined) row.hao = row.has_hao;
-    if (row.collected_hao === undefined) row.collected_hao = !!row.collected_jing;
+    // 不主動補 collected_* 欄位，避免資料表沒有該欄位時誤判可寫入。
+    if (row.collected_hao === undefined && Object.prototype.hasOwnProperty.call(row, 'collected_jing')) {
+      row.collected_hao = !!row.collected_jing;
+    }
     row.holders = PERSONS.filter(p => row['has_' + p] !== undefined ? row['has_' + p] : !!row[p]).length;
     return row;
   });
@@ -342,12 +383,157 @@ async function sbFetch(path, opts = {}) {
   return fetch(url, { ...opts, headers });
 }
 
+
+function makeConnectionResult(ok, kind, message, detail = '', status = '') {
+  return {
+    ok,
+    kind,
+    message,
+    detail,
+    status,
+    checkedAt: new Date().toISOString(),
+    navigatorOnline: navigator.onLine
+  };
+}
+
+function classifySupabaseProblem(status, body, action = '資料庫操作') {
+  const text = String(body || '');
+  const lower = text.toLowerCase();
+  if (status === 401 && (lower.includes('jwt') || lower.includes('api key') || lower.includes('apikey') || lower.includes('invalid'))) {
+    return makeConnectionResult(false, 'API key 錯誤', 'Supabase API key / JWT 可能無效或過期。', text, status);
+  }
+  if (status === 401 || status === 403) {
+    return makeConnectionResult(false, '權限錯誤', 'Supabase 拒絕這次操作，可能是 RLS 權限、資料表權限或 API key 權限不足。', text, status);
+  }
+  if (status === 404) {
+    return makeConnectionResult(false, '讀取失敗', `找不到資料表或 API 路徑，請確認資料表名稱是否為 ${TABLE}。`, text, status);
+  }
+  if (status === 400 || status === 409 || status === 422) {
+    if (/collected_/i.test(text) && /column|schema cache|could not find|找不到|欄位/i.test(text)) {
+      return makeConnectionResult(false, '資料寫入格式錯誤', '資料表缺少 collected_* 領取狀態欄位，請先在 Supabase 新增領取狀態欄位。', text, status);
+    }
+    return makeConnectionResult(false, '資料寫入格式錯誤', `${action}失敗，通常是欄位名稱、資料型態、NOT NULL 或唯一值限制造成。`, text, status);
+  }
+  if (status >= 500) {
+    return makeConnectionResult(false, 'Supabase 服務錯誤', 'Supabase 伺服器暫時無法處理，請稍後再試。', text, status);
+  }
+  return makeConnectionResult(false, '讀取失敗', `${action}失敗，HTTP ${status}。`, text, status);
+}
+
+function classifyFetchException(err, action = '資料庫操作') {
+  const msg = err && err.message ? err.message : String(err || '未知錯誤');
+  if (!navigator.onLine) {
+    return makeConnectionResult(false, '網路錯誤', '目前瀏覽器判定為離線，無法連到 Supabase。', msg);
+  }
+  if (/Failed to fetch|NetworkError|Load failed|cancelled|CORS|fetch/i.test(msg)) {
+    return makeConnectionResult(false, '網路錯誤', '無法連到 Supabase，可能是網路、DNS、CORS、瀏覽器阻擋或 GitHub Pages 暫時連線問題。', msg);
+  }
+  return makeConnectionResult(false, '讀取失敗', `${action}發生例外。`, msg);
+}
+
+async function buildHttpProblem(res, action = '資料庫操作') {
+  let body = '';
+  try { body = await res.text(); } catch(e) { body = ''; }
+  const result = classifySupabaseProblem(res.status, body, action);
+  const err = new Error(result.message);
+  err.connectionResult = result;
+  err.status = res.status;
+  err.body = body;
+  return err;
+}
+
+function updateConnectionUI(result = lastConnectionTest) {
+  if (!result) return;
+  lastConnectionTest = result;
+  const status = document.getElementById('connectionStatus');
+  if (status) {
+    const time = formatConnectionTime(result.checkedAt);
+    status.className = 'connection-status show ' + (result.ok ? 'ok' : 'bad');
+    status.innerHTML = `${result.ok ? '✅' : '⚠️'} 連線狀態：${escapeHtml(result.kind)}｜${escapeHtml(result.message)}${time ? '｜' + escapeHtml(time) : ''}`;
+  }
+  const banner = document.getElementById('offlineBanner');
+  if (banner && !result.ok) {
+    const prefix = result.kind === '網路錯誤' ? '📵 離線' : '⚠️ 資料庫無法寫入';
+    banner.textContent = `${prefix} — ${result.kind}：${result.message}（目前禁止修改或需修正資料表）`;
+  }
+}
+
+function formatConnectionTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-TW', { hour12: false });
+}
+
+function renderDbTestResult(result = lastConnectionTest) {
+  const box = document.getElementById('dbTestContent');
+  if (!box) return;
+  if (!result) {
+    box.textContent = '尚未測試';
+    return;
+  }
+  const lines = [
+    `結果：${result.ok ? '✅ 連線正常' : '❌ 連線異常'}`,
+    `分類：${result.kind}`,
+    `說明：${result.message}`,
+    `瀏覽器網路狀態：${result.navigatorOnline ? 'online' : 'offline'}`,
+    `HTTP 狀態：${result.status || '—'}`,
+    `測試時間：${formatConnectionTime(result.checkedAt) || '—'}`,
+    '',
+    `Supabase 錯誤原因 / 回應內容：`,
+    result.detail || '—'
+  ];
+  box.textContent = lines.join('\n');
+}
+
+function openDbTestModal() {
+  renderDbTestResult();
+  const el = document.getElementById('dbTestModal');
+  if (el) el.classList.add('open');
+}
+function closeDbTestModal() {
+  const el = document.getElementById('dbTestModal');
+  if (el) el.classList.remove('open');
+}
+
+async function testDatabaseConnection(showModal = true) {
+  const btn = document.getElementById('dbTestBtn');
+  const oldText = btn ? btn.textContent : '';
+  if (btn) btn.textContent = '🧪 測試中';
+  let result;
+  if (!navigator.onLine) {
+    result = makeConnectionResult(false, '網路錯誤', '目前瀏覽器判定為離線，無法測試 Supabase。');
+  } else {
+    try {
+      const res = await sbFetch(`${TABLE}?select=id&limit=1`);
+      if (!res.ok) {
+        const err = await buildHttpProblem(res, '讀取測試');
+        result = err.connectionResult;
+      } else {
+        let body = '';
+        try { body = JSON.stringify(await res.json()); } catch(e) { body = ''; }
+        result = makeConnectionResult(true, '連線正常', '可以讀取 Supabase 資料表。', body || '讀取成功', res.status);
+      }
+    } catch(e) {
+      result = classifyFetchException(e, '讀取測試');
+    }
+  }
+  lastConnectionTest = result;
+  setOnline(!!result.ok);
+  updateConnectionUI(result);
+  renderDbTestResult(result);
+  if (showModal) openDbTestModal();
+  if (btn) btn.textContent = oldText || '🧪 測試資料庫連線';
+  return result;
+}
+
 async function fetchData() {
   try {
     const res = await sbFetch(`${TABLE}?select=*&order=id.asc&limit=1000`);
-    if (!res.ok) throw new Error('fetch failed');
+    if (!res.ok) throw await buildHttpProblem(res, '讀取資料');
     const data = await res.json();
     if (data && data.length > 0) {
+      dbColumnSet = new Set(Object.keys(data[0] || {}));
       allData = normalizeRows(data);
       saveCache(allData);
       setOnline(true);
@@ -358,7 +544,9 @@ async function fetchData() {
     return allData;
   } catch(e) {
     console.warn('Supabase unavailable, using cache', e);
+    lastConnectionTest = e.connectionResult || classifyFetchException(e, '讀取資料');
     setOnline(false);
+    updateConnectionUI(lastConnectionTest);
     const cached = loadCache();
     if (cached) { allData = normalizeRows(cached); return allData; }
     allData = normalizeRows(SEED_DATA.map(r => ({...r, collected_ba:false, collected_jie:false, collected_mi:false, collected_sheng:false, collected_hao:false, collected_jing:false, collected_guan:false})));
@@ -392,6 +580,7 @@ async function seedData() {
     // re-fetch
     const res = await sbFetch(`${TABLE}?select=*&order=id.asc&limit=1000`);
     const data = await res.json();
+    dbColumnSet = new Set(Object.keys((data || [])[0] || {}));
     allData = normalizeRows(data);
     saveCache(allData);
   } catch(e) { console.error('seed failed', e); }
@@ -416,7 +605,7 @@ async function updateRecord(id, field, value) {
       method: 'PATCH',
       body: JSON.stringify(patch)
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await buildHttpProblem(res, '寫入資料');
 
     addHistory({ row, field, oldValue, newValue: value, source: '本機' });
     allData[idx][field] = value;
@@ -434,12 +623,15 @@ async function updateRecord(id, field, value) {
     showToast('✅ 已寫入資料庫');
   } catch(e) {
     console.error('write failed', e);
+    lastConnectionTest = e.connectionResult || classifyFetchException(e, '寫入資料');
+    updateConnectionUI(lastConnectionTest);
     addPendingWrite({
       type: 'field', id, stock_code: row.stock_code || '', stock_name: row.stock_name || '',
-      field, label: fieldLabel(field), oldValue, newValue: value, patch
+      field, label: fieldLabel(field), oldValue, newValue: value, patch,
+      errorKind: lastConnectionTest.kind, errorMessage: lastConnectionTest.message, errorDetail: lastConnectionTest.detail
     });
-    setOnline(false);
-    showToast('❌ 寫入失敗');
+    if (shouldTreatAsOffline(lastConnectionTest)) setOnline(false);
+    showToast(`❌ 寫入失敗：${lastConnectionTest.kind}`);
     openPendingModal();
   }
 }
@@ -452,7 +644,7 @@ function setupRealtime() {
     if (!isOnline) return;
     try {
       const res = await sbFetch(`${TABLE}?select=*&order=id.asc&limit=1000`);
-      if (!res.ok) return;
+      if (!res.ok) { lastConnectionTest = classifySupabaseProblem(res.status, await res.text(), '同步讀取'); updateConnectionUI(lastConnectionTest); return; }
       const data = await res.json();
       const normalizedData = normalizeRows(data);
       const statusHash = rows => JSON.stringify(rows.map(r => ({
@@ -516,6 +708,12 @@ function updatePendingButton() {
 function canWriteNow() {
   return isOnline && navigator.onLine;
 }
+function shouldTreatAsOffline(result) {
+  if (!result) return true;
+  // 只有真正無法連線、授權失敗或服務異常才切成禁止修改狀態。
+  // 欄位名稱 / NOT NULL / 唯一值限制等「資料寫入格式錯誤」不要誤判成離線。
+  return ['網路錯誤', 'API key 錯誤', '權限錯誤', 'Supabase 服務錯誤'].includes(result.kind);
+}
 function renderPendingWrites() {
   const box = document.getElementById('pendingContent');
   if (!box) return;
@@ -529,8 +727,9 @@ function renderPendingWrites() {
     const time = isNaN(dt.getTime()) ? item.ts : dt.toLocaleString('zh-TW', { hour12: false });
     return `<div class="history-item">
       <div class="history-title">${escapeHtml(item.stock_code)} ${escapeHtml(item.stock_name)}</div>
-      <div class="history-meta">${escapeHtml(time)}｜${escapeHtml(item.label || item.field)}</div>
+      <div class="history-meta">${escapeHtml(time)}｜${escapeHtml(item.label || item.field)}${item.errorKind ? '｜' + escapeHtml(item.errorKind) : ''}</div>
       <div class="history-change">${escapeHtml(displayValue(item.oldValue))} → ${escapeHtml(displayValue(item.newValue))}</div>
+      ${item.errorMessage ? `<div class="history-meta">錯誤原因：${escapeHtml(item.errorMessage)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -564,7 +763,7 @@ async function retryPendingWrites() {
         method: 'PATCH',
         body: JSON.stringify(item.patch || {})
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await buildHttpProblem(res, '重新同步');
 
       const idx = allData.findIndex(r => String(r.id) === String(item.id));
       if (idx >= 0) {
@@ -581,6 +780,8 @@ async function retryPendingWrites() {
       okCount++;
     } catch(e) {
       console.error('retry failed', e);
+      lastConnectionTest = e.connectionResult || classifyFetchException(e, '重新同步');
+      updateConnectionUI(lastConnectionTest);
       remain.unshift(item);
     }
   }
@@ -604,8 +805,21 @@ async function retryPendingWrites() {
 function setOnline(v) {
   isOnline = v;
   document.getElementById('statusDot').className = 'status-dot' + (v ? ' online' : '');
-  document.getElementById('offlineBanner').className = 'offline-banner' + (v ? '' : ' show');
+  const banner = document.getElementById('offlineBanner');
+  if (banner) {
+    banner.className = 'offline-banner' + (v ? '' : ' show');
+    if (!v) {
+      const result = lastConnectionTest;
+      if (result) {
+        const prefix = result.kind === '網路錯誤' ? '📵 離線' : '⚠️ 資料庫無法寫入';
+        banner.textContent = `${prefix} — ${result.kind}：${result.message}（目前禁止修改或需修正資料表）`;
+      } else {
+        banner.textContent = '📵 離線模式 — 目前禁止修改，避免誤以為已存入資料庫';
+      }
+    }
+  }
   document.body.classList.toggle('offline-mode', !v);
+  updateConnectionUI(lastConnectionTest || makeConnectionResult(!!v, v ? '連線正常' : '網路錯誤', v ? '瀏覽器目前在線上。' : '瀏覽器目前離線。'));
 }
 
 function showToast(msg) {
@@ -644,6 +858,16 @@ function parseDateKey(value) {
   return { missing: true, key: 99999999 };
 }
 
+function pickupMonth(row) {
+  const text = String(row?.pickup_time || '').trim();
+  if (!text || text === 'nan') return '';
+  let m = text.match(/\d{3}[\/\-.年]?(\d{1,2})[\/\-.月]?\d{1,2}/);
+  if (m) return String(Number(m[1]));
+  m = text.match(/(?:^|[^\d])(\d{1,2})[\/月]/);
+  if (m) return String(Number(m[1]));
+  return '';
+}
+
 function compareRows(a, b, col) {
   if (['pickup_time', 'agm_date', 'etd_last_day'].includes(col)) {
     const da = parseDateKey(a[col]);
@@ -660,6 +884,13 @@ function compareRows(a, b, col) {
 function setFilter(f, el) {
   currentFilter = f;
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  applyFilterSort();
+}
+
+function setMonthFilter(month, el) {
+  currentMonthFilter = month;
+  document.querySelectorAll('.month-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   applyFilterSort();
 }
@@ -686,6 +917,10 @@ function applyFilterSort() {
   } else if (PERSONS.includes(currentFilter)) {
     const p = currentFilter;
     data = data.filter(r => getField(r,p,'has'));
+  }
+
+  if (currentMonthFilter !== 'all') {
+    data = data.filter(r => pickupMonth(r) === currentMonthFilter);
   }
   
   if (sortCol) {
@@ -795,14 +1030,31 @@ async function updateCollectedForStock(id, value) {
   const oldValue = isStockCollected(row) ? '已領取' : '未領取';
   const newValue = value ? '已領取' : '未領取';
   const patch = {};
-  rowPersons(row).forEach(p => { patch['collected_' + p] = value; });
+  rowPersons(row).forEach(p => {
+    const colName = 'collected_' + p;
+    if (dbColumnSet.has(colName) || Object.prototype.hasOwnProperty.call(row, colName)) {
+      patch[colName] = value;
+    }
+  });
+  if (Object.keys(patch).length === 0) {
+    lastConnectionTest = makeConnectionResult(false, '資料寫入格式錯誤', '資料表缺少 collected_* 領取狀態欄位，無法把「已領取」寫入 Supabase。', '請在 Supabase 新增 collected_ba、collected_jie、collected_mi、collected_sheng、collected_hao、collected_jing、collected_guan boolean 欄位，或使用新版資料表結構。');
+    updateConnectionUI(lastConnectionTest);
+    showToast('❌ 寫入失敗：缺少領取狀態欄位');
+    addPendingWrite({
+      type: 'collected', id, stock_code: row.stock_code || '', stock_name: row.stock_name || '',
+      field: 'collected_stock', label: '領取狀態', oldValue, newValue, patch: {},
+      errorKind: lastConnectionTest.kind, errorMessage: lastConnectionTest.message, errorDetail: lastConnectionTest.detail
+    });
+    openPendingModal();
+    return;
+  }
 
   try {
     const res = await sbFetch(`${TABLE}?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch)
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await buildHttpProblem(res, '寫入領取狀態');
 
     addHistory({ row, field: 'collected_stock', oldValue, newValue, source: '本機' });
     Object.assign(row, patch);
@@ -813,12 +1065,15 @@ async function updateCollectedForStock(id, value) {
     showToast('✅ 已寫入資料庫');
   } catch(e) {
     console.error('write failed', e);
+    lastConnectionTest = e.connectionResult || classifyFetchException(e, '寫入領取狀態');
+    updateConnectionUI(lastConnectionTest);
     addPendingWrite({
       type: 'collected', id, stock_code: row.stock_code || '', stock_name: row.stock_name || '',
-      field: 'collected_stock', label: '領取狀態', oldValue, newValue, patch
+      field: 'collected_stock', label: '領取狀態', oldValue, newValue, patch,
+      errorKind: lastConnectionTest.kind, errorMessage: lastConnectionTest.message, errorDetail: lastConnectionTest.detail
     });
-    setOnline(false);
-    showToast('❌ 寫入失敗');
+    if (shouldTreatAsOffline(lastConnectionTest)) setOnline(false);
+    showToast(`❌ 寫入失敗：${lastConnectionTest.kind}`);
     openPendingModal();
   }
 }
@@ -1027,6 +1282,8 @@ function clearHistory() {
 async function syncData() {
   const btn = document.getElementById('syncBtn');
   btn.textContent = '⏳';
+  lastConnectionTest = makeConnectionResult(navigator.onLine, navigator.onLine ? '尚未測試' : '網路錯誤', navigator.onLine ? '尚未測試 Supabase，請按「測試資料庫連線」。' : '瀏覽器目前離線。');
+  updateConnectionUI(lastConnectionTest);
   await fetchData();
   updatePendingButton();
   applyFilterSort();
@@ -1049,6 +1306,8 @@ async function init() {
   window.addEventListener('online', () => { setOnline(true); syncData(); if (loadPendingWrites().length) showToast('🔁 可按重新同步本機修改'); });
   window.addEventListener('offline', () => setOnline(false));
   
+  lastConnectionTest = makeConnectionResult(navigator.onLine, navigator.onLine ? '尚未測試' : '網路錯誤', navigator.onLine ? '尚未測試 Supabase，請按「測試資料庫連線」。' : '瀏覽器目前離線。');
+  updateConnectionUI(lastConnectionTest);
   await fetchData();
   updatePendingButton();
   applyFilterSort();
