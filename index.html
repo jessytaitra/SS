@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -66,7 +66,7 @@
   .stat-sep { width: 1px; background: var(--border); flex-shrink: 0; }
   
   /* Table container */
-  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; max-height: calc(100vh - 230px); }
   table { width: 100%; border-collapse: collapse; min-width: 900px; }
   th { background: var(--surface); color: var(--text2); font-size: 12px; font-weight: 600; padding: 10px 8px; text-align: left; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid var(--border); white-space: nowrap; user-select: none; cursor: pointer; }
   th:hover { color: var(--accent); }
@@ -76,13 +76,20 @@
   tr:hover td { background: rgba(108,141,250,.05); }
   
   /* Person checkboxes */
-  .person-cells { display: flex; gap: 4px; }
-  .p-check { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all .15s; border: 1.5px solid var(--border); background: var(--surface2); flex-shrink: 0; }
+  .person-cells { display: flex; gap: 4px; flex-wrap: wrap; min-width: 210px; }
+  .p-check { min-width: 42px; height: 28px; padding: 0 6px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; border: 1.5px solid var(--border); background: var(--surface2); flex-shrink: 0; white-space: nowrap; }
   .p-check:hover { border-color: var(--green); }
-  .p-check.checked { background: rgba(52,211,153,.15); border-color: var(--green); }
-  .p-check.has-stock { border-color: var(--accent2); }
-  .p-check.checked.has-stock { background: rgba(52,211,153,.2); border-color: var(--green); }
-  .p-check.no-stock { opacity: .2; cursor: default; }
+  .p-check.checked { box-shadow: inset 0 0 0 2px rgba(255,255,255,.55); }
+  .p-check.has-stock { border-color: rgba(255,255,255,.28); }
+  .p-check.checked.has-stock { border-color: rgba(255,255,255,.7); }
+  .p-check.no-stock { opacity: .26; cursor: default; filter: grayscale(.25); }
+  .p-check.p-ba { background: #facc15; color: #111827; }
+  .p-check.p-jie { background: #8b5cf6; color: #ffffff; }
+  .p-check.p-mi { background: #f472b6; color: #111827; }
+  .p-check.p-sheng { background: #fb923c; color: #111827; }
+  .p-check.p-hao { background: #64748b; color: #ffffff; }
+  .p-check.p-jing { background: #34d399; color: #052e1b; }
+  .p-check.p-guan { background: #60a5fa; color: #08111f; }
   
   /* Badges */
   .stock-code { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; color: var(--accent2); background: rgba(167,139,250,.1); padding: 2px 6px; border-radius: 4px; }
@@ -98,8 +105,8 @@
   /* Registrar */
   .registrar-text { font-size: 12px; color: var(--text3); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .edit-hint { font-size: 12px; color: var(--text3); font-style: italic; white-space: nowrap; }
-  td[ondblclick] { cursor: text; }
-  td[ondblclick]:hover { background: rgba(108,141,250,.08); }
+  .editable-td { cursor: text; }
+  .editable-td:hover { background: rgba(108,141,250,.08); }
   
   /* Progress */
   .progress-cell { min-width: 80px; }
@@ -197,7 +204,7 @@
 <div class="connection-status" id="connectionStatus"></div>
 
 <div class="filter-bar" id="filterBar">
-  <button class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">全部</button>
+  <button class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">全部人員</button>
   <button class="filter-chip person-chip" data-filter="ba" onclick="setFilter('ba',this)">⭐ 爸</button>
   <button class="filter-chip person-chip" data-filter="jie" onclick="setFilter('jie',this)">💜 婕</button>
   <button class="filter-chip person-chip" data-filter="mi" onclick="setFilter('mi',this)">🌸 咪</button>
@@ -206,9 +213,10 @@
   <button class="filter-chip person-chip" data-filter="jing" onclick="setFilter('jing',this)">💚 菁</button>
   <button class="filter-chip person-chip" data-filter="guan" onclick="setFilter('guan',this)">🔵 亘</button>
   <div style="width:1px;background:var(--border);flex-shrink:0"></div>
-  <button class="filter-chip" data-filter="pending" onclick="setFilter('pending',this)">⏳ 未全領</button>
-  <button class="filter-chip" data-filter="done" onclick="setFilter('done',this)">✅ 全部領完</button>
-  <button class="filter-chip" data-filter="pickup" onclick="setFilter('pickup',this)">📅 有領取時間</button>
+  <button class="filter-chip active" data-status="pending" onclick="setStatusFilter('pending',this)">⏳ 未領取</button>
+  <button class="filter-chip" data-status="done" onclick="setStatusFilter('done',this)">✅ 已領取</button>
+  <button class="filter-chip" data-status="all" onclick="setStatusFilter('all',this)">全部狀態</button>
+  <button class="filter-chip" data-status="pickup" onclick="setStatusFilter('pickup',this)">📅 有領取時間</button>
 </div>
 
 <div class="month-bar" id="monthBar">
@@ -347,6 +355,7 @@ const SEED_DATA = [{"stock_code": "6770","stock_name": "力積電","guan": false
 let allData = [];
 let displayData = [];
 let currentFilter = 'all';
+let currentStatusFilter = 'pending';
 let currentMonthFilter = 'all';
 let dbColumnSet = new Set();
 let sortCol = null;
@@ -615,6 +624,7 @@ async function updateRecord(id, field, value) {
     if (currentRowId === id) {
       const currentRow = allData.find(r => r.id === id);
       if (currentRow) {
+        document.getElementById('mTitle').textContent = `${currentRow.stock_name||''} ${currentRow.stock_code?'('+currentRow.stock_code+')':''}`;
         document.getElementById('mPickup').textContent = currentRow.pickup_time && currentRow.pickup_time !== 'nan' ? currentRow.pickup_time : '（未填寫）';
         document.getElementById('mGift').textContent = currentRow.gift || '—';
         document.getElementById('mRegistrar').textContent = [currentRow.registrar, currentRow.registrar_address].filter(Boolean).join('｜') || '—';
@@ -652,6 +662,8 @@ function setupRealtime() {
         pickup_time: r.pickup_time || '',
         gift: r.gift || '',
         registrar: r.registrar || '',
+        stock_code: r.stock_code || '',
+        stock_name: r.stock_name || '',
         registrar_address: r.registrar_address || '',
         ...Object.fromEntries(PERSONS.flatMap(p => [
           ['has_' + p, !!(r['has_' + p] !== undefined ? r['has_' + p] : r[p])],
@@ -883,7 +895,14 @@ function compareRows(a, b, col) {
 // ====== FILTER / SORT ======
 function setFilter(f, el) {
   currentFilter = f;
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.filter-chip[data-filter]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  applyFilterSort();
+}
+
+function setStatusFilter(status, el) {
+  currentStatusFilter = status;
+  document.querySelectorAll('.filter-chip[data-status]').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   applyFilterSort();
 }
@@ -908,15 +927,17 @@ function applyFilterSort() {
     );
   }
   
-  if (currentFilter === 'pending') {
-    data = data.filter(r => isStockPending(r));
-  } else if (currentFilter === 'done') {
-    data = data.filter(r => isStockCollected(r));
-  } else if (currentFilter === 'pickup') {
-    data = data.filter(r => r.pickup_time && r.pickup_time.trim());
-  } else if (PERSONS.includes(currentFilter)) {
+  if (PERSONS.includes(currentFilter)) {
     const p = currentFilter;
     data = data.filter(r => getField(r,p,'has'));
+  }
+
+  if (currentStatusFilter === 'pending') {
+    data = data.filter(r => isStockPending(r));
+  } else if (currentStatusFilter === 'done') {
+    data = data.filter(r => isStockCollected(r));
+  } else if (currentStatusFilter === 'pickup') {
+    data = data.filter(r => r.pickup_time && r.pickup_time.trim());
   }
 
   if (currentMonthFilter !== 'all') {
@@ -950,7 +971,7 @@ function editableCell(row, field, label, className = '') {
   const value = raw && String(raw).trim() && raw !== 'nan' ? String(raw) : '';
   const shown = value || '—';
   const cls = className ? ` class="${className} editable-cell"` : ' class="editable-cell"';
-  return `<span${cls} title="點一下修改：${escapeHtml(value || label)}">${escapeHtml(shown)}</span>`;
+  return `<span${cls} title="點一下修改${label}">${escapeHtml(shown)}</span>`;
 }
 
 function openEditPrompt(e, id, field, label) {
@@ -980,15 +1001,15 @@ function renderTable() {
   
   const html = displayData.map(row => {
     const allDone = isStockCollected(row);
-    const rowClass = allDone ? 'style="opacity:.6"' : '';
+    const rowStyle = allDone ? 'opacity:.6;cursor:pointer' : 'cursor:pointer';
     
     const persons = PERSONS.map(p => {
       const has = getField(row,p,'has');
       const col = isStockCollected(row);
-      if (!has) return `<div class="p-check no-stock" title="${PERSON_LABELS[p]}">·</div>`;
-      return `<div class="p-check has-stock ${col?'checked':''}" 
+      if (!has) return `<div class="p-check p-${p} no-stock" title="${PERSON_LABELS[p]}">${PERSON_LABELS[p]}</div>`;
+      return `<div class="p-check p-${p} has-stock ${col?'checked':''}" 
         onclick="togglePerson(event,${row.id},'${p}')"
-        title="${PERSON_LABELS[p]}">${col?'✓':PERSON_ICONS[p]}</div>`;
+        title="${PERSON_LABELS[p]}">${col?'✓ ':''}${PERSON_LABELS[p]}</div>`;
     }).join('');
     
     const totalHas = rowPersons(row).length;
@@ -996,13 +1017,15 @@ function renderTable() {
     const pct = totalHas > 0 ? Math.round(totalCol/totalHas*100) : 0;
     const holderClass = totalHas >= 6 ? 'holders-6' : totalHas >= 5 ? 'holders-5' : 'holders-low';
     
+    const code = editableCell(row, 'stock_code', '代碼', 'stock-code');
+    const name = editableCell(row, 'stock_name', '名稱', 'stock-name');
     const pickup = editableCell(row, 'pickup_time', '領取時間', 'date-text');
     const gift = editableCell(row, 'gift', '紀念品', 'gift-text');
     const registrar = editableCell(row, 'registrar', '股代', 'registrar-text');
     
-    return `<tr ${rowClass} onclick="openModal(${row.id})" style="cursor:pointer">
-      <td><span class="stock-code">${row.stock_code||'-'}</span></td>
-      <td><div class="stock-name">${row.stock_name||''}</div></td>
+    return `<tr onclick="openModal(${row.id})" style="${rowStyle}">
+      <td class="editable-td" onclick="openEditPrompt(event,${row.id},'stock_code','代碼')">${code}</td>
+      <td class="editable-td" onclick="openEditPrompt(event,${row.id},'stock_name','名稱')">${name}</td>
       <td onclick="event.stopPropagation()"><div class="person-cells">${persons}</div>
         <div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':pct>50?'var(--yellow)':'var(--accent)'}"></div></div>
         <div class="progress-text">${isStockCollected(row) ? '已領取' : '未領取'}</div></div>
@@ -1185,6 +1208,8 @@ function fieldLabel(field) {
     gift: '紀念品',
     registrar: '股代',
     registrar_address: '股代地址',
+    stock_code: '代碼',
+    stock_name: '名稱',
     collected_stock: '領取狀態'
   };
   if (field && field.startsWith('collected_')) return '領取狀態';
