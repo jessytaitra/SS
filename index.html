@@ -90,6 +90,7 @@
   .p-check.p-hao { background: #64748b; color: #ffffff; }
   .p-check.p-jing { background: #34d399; color: #052e1b; }
   .p-check.p-guan { background: #60a5fa; color: #08111f; }
+  .p-check.p-mom { background: #14b8a6; color: #042f2e; }
   
   /* Badges */
   .stock-code { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; color: var(--accent2); background: rgba(167,139,250,.1); padding: 2px 6px; border-radius: 4px; }
@@ -180,6 +181,7 @@
   .p-sheng { color: #fb923c; }
   .p-hao { color: #fbbf24; }
   .p-ba { color: #facc15; }
+  .p-mom { color: #2dd4bf; }
 </style>
 </head>
 <body>
@@ -189,7 +191,7 @@
 <div class="header">
   <div class="header-top">
     <h1>📦 股東紀念品管理</h1>
-    <span style="font-size: 12px;color:var(--text3)">福邦7人版</span>
+    <span style="font-size: 12px;color:var(--text3)">福邦8人版</span>
     <div class="status-dot" id="statusDot"></div>
   </div>
   <div class="controls">
@@ -212,6 +214,7 @@
   <button class="filter-chip person-chip" data-filter="hao" onclick="setFilter('hao',this)">☀️ 昊</button>
   <button class="filter-chip person-chip" data-filter="jing" onclick="setFilter('jing',this)">💚 菁</button>
   <button class="filter-chip person-chip" data-filter="guan" onclick="setFilter('guan',this)">🔵 亘</button>
+  <button class="filter-chip person-chip" data-filter="mom" onclick="setFilter('mom',this)">👩 Mom</button>
   <div style="width:1px;background:var(--border);flex-shrink:0"></div>
   <button class="filter-chip active" data-status="pending" onclick="setStatusFilter('pending',this)">⏳ 未領取</button>
   <button class="filter-chip" data-status="done" onclick="setStatusFilter('done',this)">✅ 已領取</button>
@@ -248,6 +251,8 @@
   <div class="stat-item"><span class="stat-num p-jing" id="st-jing">-</span><span class="stat-label">菁待領</span></div>
   <div class="stat-sep"></div>
   <div class="stat-item"><span class="stat-num p-guan" id="st-guan">-</span><span class="stat-label">亘待領</span></div>
+  <div class="stat-sep"></div>
+  <div class="stat-item"><span class="stat-num p-mom" id="st-mom">-</span><span class="stat-label">Mom待領</span></div>
 </div>
 
 <div id="loading" class="loading"><div class="spinner"></div></div>
@@ -341,10 +346,10 @@
 const SUPABASE_URL = 'https://sippzngyuszavmkpzrno.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpcHB6bmd5dXN6YXZta3B6cm5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMTkyOTUsImV4cCI6MjA5MDY5NTI5NX0.aymRYiAJJPjFDtSmJI1lyp1WYrFc-IeRXx7AONaWXCY';
 const TABLE = 'shareholder_gifts';
-const PERSONS = ['ba','jie','mi','sheng','hao','jing','guan'];
-const PERSON_LABELS = {ba:'爸',jie:'婕',mi:'咪',sheng:'昇',hao:'昊',jing:'菁',guan:'亘'};
-const PERSON_ICONS = {ba:'⭐',jie:'💜',mi:'🌸',sheng:'🟠',hao:'☀️',jing:'💚',guan:'🔵'};
-const CACHE_KEY = 'sg_data_v3_hao';
+const PERSONS = ['ba','jie','mi','sheng','hao','jing','guan','mom'];
+const PERSON_LABELS = {ba:'爸',jie:'婕',mi:'咪',sheng:'昇',hao:'昊',jing:'菁',guan:'亘',mom:'Mom'};
+const PERSON_ICONS = {ba:'⭐',jie:'💜',mi:'🌸',sheng:'🟠',hao:'☀️',jing:'💚',guan:'🔵',mom:'👩'};
+const CACHE_KEY = 'sg_data_v4_mom';
 const HISTORY_KEY = 'sg_history_v1';
 const PENDING_KEY = 'sg_pending_writes_v1';
 
@@ -558,7 +563,7 @@ async function fetchData() {
     updateConnectionUI(lastConnectionTest);
     const cached = loadCache();
     if (cached) { allData = normalizeRows(cached); return allData; }
-    allData = normalizeRows(SEED_DATA.map(r => ({...r, collected_ba:false, collected_jie:false, collected_mi:false, collected_sheng:false, collected_hao:false, collected_jing:false, collected_guan:false})));
+    allData = normalizeRows(SEED_DATA.map(r => ({...r, collected_ba:false, collected_jie:false, collected_mi:false, collected_sheng:false, collected_hao:false, collected_jing:false, collected_guan:false, collected_mom:false})));
     return allData;
   }
 }
@@ -570,7 +575,7 @@ async function seedData() {
       stock_code: r.stock_code,
       stock_name: r.stock_name,
       has_ba: r.ba, has_jie: r.jie, has_mi: r.mi,
-      has_sheng: r.sheng, has_hao: r.hao, has_jing: r.jing, has_guan: r.guan,
+      has_sheng: r.sheng, has_hao: r.hao, has_jing: r.jing, has_guan: r.guan, has_mom: r.mom,
       holders: r.holders,
       etd_last_day: r.etd_last_day,
       agm_date: r.agm_date,
@@ -579,7 +584,7 @@ async function seedData() {
       registrar_address: r.registrar_address,
       gift: r.gift,
       collected_ba: false, collected_jie: false, collected_mi: false,
-      collected_sheng: false, collected_hao: false, collected_jing: false, collected_guan: false
+      collected_sheng: false, collected_hao: false, collected_jing: false, collected_guan: false, collected_mom: false
     }));
     const batchSize = 50;
     for (let i=0; i<rows.length; i+=batchSize) {
@@ -1060,7 +1065,7 @@ async function updateCollectedForStock(id, value) {
     }
   });
   if (Object.keys(patch).length === 0) {
-    lastConnectionTest = makeConnectionResult(false, '資料寫入格式錯誤', '資料表缺少 collected_* 領取狀態欄位，無法把「已領取」寫入 Supabase。', '請在 Supabase 新增 collected_ba、collected_jie、collected_mi、collected_sheng、collected_hao、collected_jing、collected_guan boolean 欄位，或使用新版資料表結構。');
+    lastConnectionTest = makeConnectionResult(false, '資料寫入格式錯誤', '資料表缺少 collected_* 領取狀態欄位，無法把「已領取」寫入 Supabase。', '請在 Supabase 新增 collected_ba、collected_jie、collected_mi、collected_sheng、collected_hao、collected_jing、collected_guan、collected_mom boolean 欄位，或使用新版資料表結構。');
     updateConnectionUI(lastConnectionTest);
     showToast('❌ 寫入失敗：缺少領取狀態欄位');
     addPendingWrite({
