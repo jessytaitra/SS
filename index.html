@@ -208,13 +208,13 @@
 <div class="filter-bar" id="filterBar">
   <button class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">全部人員</button>
   <button class="filter-chip person-chip" data-filter="ba" onclick="setFilter('ba',this)">⭐ 爸</button>
+  <button class="filter-chip person-chip" data-filter="mom" onclick="setFilter('mom',this)">👩 媽</button>
   <button class="filter-chip person-chip" data-filter="jie" onclick="setFilter('jie',this)">💜 婕</button>
   <button class="filter-chip person-chip" data-filter="mi" onclick="setFilter('mi',this)">🌸 咪</button>
   <button class="filter-chip person-chip" data-filter="sheng" onclick="setFilter('sheng',this)">🟠 昇</button>
   <button class="filter-chip person-chip" data-filter="hao" onclick="setFilter('hao',this)">☀️ 昊</button>
   <button class="filter-chip person-chip" data-filter="jing" onclick="setFilter('jing',this)">💚 菁</button>
   <button class="filter-chip person-chip" data-filter="guan" onclick="setFilter('guan',this)">🔵 亘</button>
-  <button class="filter-chip person-chip" data-filter="mom" onclick="setFilter('mom',this)">👩 Mom</button>
   <div style="width:1px;background:var(--border);flex-shrink:0"></div>
   <button class="filter-chip active" data-status="pending" onclick="setStatusFilter('pending',this)">⏳ 未領取</button>
   <button class="filter-chip" data-status="done" onclick="setStatusFilter('done',this)">✅ 已領取</button>
@@ -240,6 +240,8 @@
   <div class="stat-sep"></div>
   <div class="stat-item"><span class="stat-num p-ba" id="st-ba">-</span><span class="stat-label">爸待領</span></div>
   <div class="stat-sep"></div>
+  <div class="stat-item"><span class="stat-num p-mom" id="st-mom">-</span><span class="stat-label">媽待領</span></div>
+  <div class="stat-sep"></div>
   <div class="stat-item"><span class="stat-num p-jie" id="st-jie">-</span><span class="stat-label">婕待領</span></div>
   <div class="stat-sep"></div>
   <div class="stat-item"><span class="stat-num p-mi" id="st-mi">-</span><span class="stat-label">咪待領</span></div>
@@ -251,8 +253,6 @@
   <div class="stat-item"><span class="stat-num p-jing" id="st-jing">-</span><span class="stat-label">菁待領</span></div>
   <div class="stat-sep"></div>
   <div class="stat-item"><span class="stat-num p-guan" id="st-guan">-</span><span class="stat-label">亘待領</span></div>
-  <div class="stat-sep"></div>
-  <div class="stat-item"><span class="stat-num p-mom" id="st-mom">-</span><span class="stat-label">Mom待領</span></div>
 </div>
 
 <div id="loading" class="loading"><div class="spinner"></div></div>
@@ -346,8 +346,8 @@
 const SUPABASE_URL = 'https://sippzngyuszavmkpzrno.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpcHB6bmd5dXN6YXZta3B6cm5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMTkyOTUsImV4cCI6MjA5MDY5NTI5NX0.aymRYiAJJPjFDtSmJI1lyp1WYrFc-IeRXx7AONaWXCY';
 const TABLE = 'shareholder_gifts';
-const PERSONS = ['ba','jie','mi','sheng','hao','jing','guan','mom'];
-const PERSON_LABELS = {ba:'爸',jie:'婕',mi:'咪',sheng:'昇',hao:'昊',jing:'菁',guan:'亘',mom:'Mom'};
+const PERSONS = ['ba','mom','jie','mi','sheng','hao','jing','guan'];
+const PERSON_LABELS = {ba:'爸',jie:'婕',mi:'咪',sheng:'昇',hao:'昊',jing:'菁',guan:'亘',mom:'媽'};
 const PERSON_ICONS = {ba:'⭐',jie:'💜',mi:'🌸',sheng:'🟠',hao:'☀️',jing:'💚',guan:'🔵',mom:'👩'};
 const CACHE_KEY = 'sg_data_v4_mom';
 const HISTORY_KEY = 'sg_history_v1';
